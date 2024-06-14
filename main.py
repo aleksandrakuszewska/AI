@@ -76,9 +76,10 @@ if uploaded_file:
     st.write("Data description:")
     st.write("Original data:", df)
 
-    sample_data = st.checkbox("Data sampling (20%):")
+    sample_data = st.checkbox("Enable data sampling")
     if sample_data:
-        df = df.sample(frac=0.2)
+        percentage = st.slider("Percentage", min_value=1, max_value=100, value=10)
+        df = df.sample(frac=percentage * 0.01)
         # result_df = analyze_data(df, sample=sample_data)
     st.write("Analysis results:")
 
