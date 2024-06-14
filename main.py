@@ -25,10 +25,10 @@ def load_data(uploaded_file):
     if ext in file_formats:
         return file_formats[ext](uploaded_file)
     else:
-        st.error(f"Nieobsługiwany format pliku: {ext}")
+        st.error(f"Unsupported file format: {ext}")
         return None
 
-st.set_page_config(page_title="Analiza danych tabelarycznych")
+st.set_page_config(page_title="DataFrame analysis")
 
 #st.markdown(
 #    """
@@ -58,31 +58,29 @@ st.set_page_config(page_title="Analiza danych tabelarycznych")
 #         st.error(f"Nie udało się pobrać odpowiedzi: {e}")
 #         return None
 
-st.title("Analiza danych tabelarycznych")
+st.title("DataFrame Analysis")
 
 st.sidebar.write("""
-### Jak używać:
-1. Załaduj plik CSV lub Excel.
-2. Zobacz opis danych.
-3. Wybierz opcję próbkowania danych.
-4. Zobacz wyniki analizy.
-5. Zadawaj pytania dotyczące danych.
+How to use:
+1. Load CSV or Excel file.
+3. Pick your sampling method.
+4. Ask LLM about the data.
 """)
 
-uploaded_file = st.file_uploader("Załaduj plik CSV lub Excel", type=["csv", "xls", "xlsx", "xlsm", "xlsb"])
+uploaded_file = st.file_uploader("Load CSV or Excel file", type=["csv", "xls", "xlsx", "xlsm", "xlsb"])
 
 # if uploaded_file:
 #     data_frame = load_data(uploaded_file)
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
-    st.write("Opis danych:")
-    st.write("Oryginalne dane:", df)
+    st.write("Data description:")
+    st.write("Original data:", df)
 
-    sample_data = st.checkbox("Próbkować dane (20%)")
+    sample_data = st.checkbox("Data sampling (20%):")
     if sample_data:
         df = df.sample(frac=0.2)
         # result_df = analyze_data(df, sample=sample_data)
-    st.write("Wyniki analizy:")
+    st.write("Analysis results:")
 
     numeric_columns = [col for col in df.columns if "ID" not in col.upper() and pd.api.types.is_numeric_dtype(df[col])]
     describe_result = df[numeric_columns].describe().transpose()
@@ -103,46 +101,49 @@ if uploaded_file:
 
     # if prompt := st.text_input("O czym są te dane?"):
     #     st.session_state.messages.append({"role": "user", "content": prompt})
-what_to_use = st.sidebar.radio("Co wybrać:", options=["OpenAI", "Lokalny model"])
+what_to_use = st.sidebar.radio("What to use:", options=["OpenAI", "Local model"])
 
 if what_to_use == "OpenAI":
-    openai_api_key = st.sidebar.text_input("Klucz API OpenAI", type="password")
+    openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
 
-    if st.sidebar.button("Połącz"):
+    if st.sidebar.button("Connect"):
         st.session_state.llm = ChatOpenAI(
             temperature=0, model="gpt-3.5-turbo", openai_api_key=openai_api_key, streaming=True
         )
 
-if what_to_use == "Lokalny model":
-    st.sidebar.info("Testowany model lokalny: CommandR+")
+if what_to_use == "Local model":
+    st.sidebar.info("Tested local model: CommandR+")
 
-    local_model_path = st.sidebar.text_input("Ścieżka do lokalnego modelu",
-                                             help="Używany loader to LlamaCpp.",
+    local_model_path = st.sidebar.text_input("Local model path",
+                                             help="Loader used LlamaCpp.",
                                              placeholder="models/my_model.gguf")
 
-    st.sidebar.warning("Pamiętaj, że ustawienia GPU będą działać tylko wtedy, gdy llama-cpp-python zostanie zainstalowany z włączonym przyspieszeniem GPU.")
+    st.sidebar.warning("Keep in mind that GPU settings will only work if llama-cpp-python is installed with GPU acceleration enabled (BLAS = 1).")
 
-    gpu_layers = st.sidebar.number_input("Warstwy GPU",
+    gpu_layers = st.sidebar.number_input("GPU layer count",
                                          min_value=-1,
                                          value=8,
                                          step=1,
-                                         help="Ustaw tak wysoko, jak to możliwe, aby uzyskać najszybszą odpowiedź. "
-                                              "Ustaw na 0, jeśli nie masz dedykowanej karty GPU.")
+                                         help="The more layers are offset to GPU, the faster the model should generate."
+                                              "Set to 0 if you do not have dedicated GPU.")
 
-    ctx_length = st.sidebar.number_input("Długość kontekstu",
+    ctx_length = st.sidebar.number_input("Context length",
                                          min_value=512,
                                          value=2048,
                                          step=1024,
-                                         help="Długość kontekstu dla modelu. Im dłuższy, tym lepsza pamięć AI, "
-                                              "jednak kosztem prędkości i użycia pamięci fizycznej.")
+                                         help="The higher the context length - the more the model will remember, "
+                                              "however at a cost of higher memory usage.")
 
-    max_tokens = st.sidebar.number_input("Maksymalna ilość tokenów",
+    max_tokens = st.sidebar.number_input("Max token count",
                                          min_value=1,
-                                         value=64,
-                                         step=64,
-                                         help="Ile tokenów AI powinno wygenerować w odpowiedzi.")
+                                         value=512,
+                                         step=256,
+                                         help="How many tokens AI should generate, keep in mind that in data analysis,"
+                                         "majority of the tokens are used for thought generation, that is not actually"
+                                         "given to the user as an output, so this value should be A LOT higher than in"
+                                         "most use cases.")
 
-    if st.sidebar.button("Załaduj"):
+    if st.sidebar.button("Load"):
         st.session_state.llm = LlamaCpp(
             model_path=local_model_path,
             n_gpu_layers=gpu_layers,
@@ -153,8 +154,8 @@ if what_to_use == "Lokalny model":
             n_batch=512
         )
 
-if "messages" not in st.session_state or st.sidebar.button("Wyczyść historię rozmowy"):
-    st.session_state["messages"] = [{"role": "assistant", "content": "Co chcesz wiedzieć na temat danych?"}]
+if "messages" not in st.session_state or st.sidebar.button("Clear message history"):
+    st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you with that data?"}]
 
 for msg in st.session_state.messages:
     if msg["role"] == "assistant":
@@ -162,16 +163,16 @@ for msg in st.session_state.messages:
     elif msg["role"] == "user":
         st.chat_message(msg["role"]).write(msg["content"])
 
-if prompt := st.chat_input("O czym są te dane?"):
+if prompt := st.chat_input("What is this data about?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
     if 'llm' in st.session_state:
         llm = st.session_state.llm
     else:
-        st.info("Model nie jest załadowany.")
+        st.info("Model is not loaded.")
         st.stop()
     if 'df' not in locals():
-        st.info("Plik z danymi nie został wybrany.")
+        st.info("Data file is not loaded.")
         st.stop()
 
     pandas_df_agent = create_pandas_dataframe_agent(
