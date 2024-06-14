@@ -1,0 +1,8 @@
+langchain==0.2.3
+langchain_community==0.2.4
+langchain_experimental==0.0.60
+pandas==2.2.2
+streamlit==1.35.0
+llama-cpp-python
+tabulate
+openai
