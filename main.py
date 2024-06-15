@@ -1,4 +1,5 @@
 import langchain_core
+import requests
 from langchain.agents import AgentType
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
@@ -30,22 +31,22 @@ def load_data(uploaded_file):
 
 st.set_page_config(page_title="DataFrame analysis")
 
-#st.markdown(
-#    """
-#    <style>
-#    .stApp {
-#        background: url("https://media.licdn.com/dms/image/C5112AQGWCENbwjTCLw/article-cover_image-shrink_600_2000/0/1520095639394?e=2147483647&v=beta&t=l046v8DL2uB4B-mHN-731BhHK0OcNkh47NztypL1KHI") no-repeat center center fixed !important;
-#        background-size: cover !important;
-#    }
-#    .main {
-#        background: none !important;
-#        padding-left: 10% !important;
-#        padding-right: 40% !important;
-#    }
-#    </style>
-#    """,
-#    unsafe_allow_html=True
-#)
+st.markdown(
+   """
+   <style>
+   .stApp {
+       background: url("https://media.licdn.com/dms/image/C5112AQGWCENbwjTCLw/article-cover_image-shrink_600_2000/0/1520095639394?e=2147483647&v=beta&t=l046v8DL2uB4B-mHN-731BhHK0OcNkh47NztypL1KHI") no-repeat center center fixed !important;
+       background-size: cover !important;
+   }
+   .main {
+       background: none !important;
+       padding-left: 10% !important;
+       padding-right: 40% !important;
+   }
+   </style>
+   """,
+   unsafe_allow_html=True
+)
 
 # def query(payload):
 #     headers = {"Authorization": f"Bearer {API_KEY}"}
@@ -102,7 +103,7 @@ if uploaded_file:
 
     # if prompt := st.text_input("O czym są te dane?"):
     #     st.session_state.messages.append({"role": "user", "content": prompt})
-what_to_use = st.sidebar.radio("What to use:", options=["OpenAI", "Local model"])
+what_to_use = st.sidebar.radio("What to use:", options=["OpenAI", "Local model","Hugging Face"])
 
 if what_to_use == "OpenAI":
     openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
@@ -111,6 +112,19 @@ if what_to_use == "OpenAI":
         st.session_state.llm = ChatOpenAI(
             temperature=0, model="gpt-3.5-turbo", openai_api_key=openai_api_key, streaming=True
         )
+if what_to_use == "Hugging Face":
+    huggingface_model = st.sidebar.text_input("Model Name",placeholder = "e.g. meta-llama/Meta-Llama-3-8B-Instruct")
+    huggingface_api_key = st.sidebar.text_input("Hugging Face API Key", type="password")
+
+    API_URL = f"https://api-inference.huggingface.co/models/{huggingface_model}"
+    headers = {"Authorization": f"Bearer {huggingface_api_key}"}
+    if st.sidebar.button("Connect Hugging Face"):
+        def query(payload):
+            response = requests.post(API_URL, headers=headers, json=payload)
+            return response.json()
+
+        st.session_state.hf_query = query
+        st.session_state.llm = None  # No direct LLM integration for Hugging Face in LangChain yet
 
 if what_to_use == "Local model":
     st.sidebar.info("Tested local model: CommandR+")
@@ -167,28 +181,35 @@ for msg in st.session_state.messages:
 if prompt := st.chat_input("What is this data about?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
-    if 'llm' in st.session_state:
+
+    if 'llm' in st.session_state and st.session_state.llm:
         llm = st.session_state.llm
+
+        pandas_df_agent = create_pandas_dataframe_agent(
+            llm,
+            df,  # Passing DataFrame as input
+            verbose=True
+        )
+
+        try:
+            response = pandas_df_agent.invoke(st.session_state.messages)
+            st.session_state.messages.append({"role": "assistant", "content": response['output']})
+            st.chat_message("assistant").write(response["output"])
+        except Exception as e:
+            st.error(f"Could not analyze data: {e}")
+
+    elif 'hf_query' in st.session_state:
+        query = st.session_state.hf_query
+        payload = {"inputs": prompt}
+
+        try:
+            response = query(payload)
+            generated_text = response[0]['generated_text']
+            st.session_state.messages.append({"role": "assistant", "content": generated_text})
+            st.chat_message("assistant").write(generated_text)
+        except Exception as e:
+            st.error(f"Could not analyze data: {e}")
+
     else:
         st.info("Model is not loaded.")
         st.stop()
-    if 'df' not in locals():
-        st.info("Data file is not loaded.")
-        st.stop()
-
-    pandas_df_agent = create_pandas_dataframe_agent(
-        llm,
-        df,  # Teraz przekazujemy DataFrame jako dane wejściowe
-        verbose=True,
-        handle_parsing_errors=True
-    )
-
-    try:
-        response = pandas_df_agent.invoke(st.session_state.messages)
-    except langchain_core.exceptions.OutputParserException as e:
-        st.error(f"Could not analyze data: {e}")
-        st.stop()
-
-    st.session_state.messages.append({"role": "assistant", "content": response['output']})
-    st.chat_message("assistant").write(response["output"])
-
