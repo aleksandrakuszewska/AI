@@ -47,8 +47,6 @@ if sample_data:
 
 uploaded_file = st.file_uploader("Load CSV or Excel file", type=["csv", "xls", "xlsx", "xlsm", "xlsb"])
 
-# if uploaded_file:
-#     data_frame = load_data(uploaded_file)
 if uploaded_file:
     final_dataframe = pd.read_csv(uploaded_file)
     st.write("Data description:")
@@ -74,15 +72,6 @@ if uploaded_file:
         st.write(general_analysis_report_of_dataframe.transpose())
         dataframes_to_send.append(general_analysis_report_of_dataframe)
 
-
-    # for msg in st.session_state.messages:
-    #     if msg["role"] == "assistant":
-    #         st.text(f"Assistant: {msg['content']}")
-    #     elif msg["role"] == "user":
-    #         st.text(f"User: {msg['content']}")
-
-    # if prompt := st.text_input("O czym są te dane?"):
-    #     st.session_state.messages.append({"role": "user", "content": prompt})
 what_to_use = st.sidebar.radio("What to use:", options=["OpenAI", "Local model","Hugging Face"])
 
 if what_to_use == "OpenAI":
