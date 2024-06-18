@@ -54,8 +54,6 @@ if uploaded_file:
 
     final_dataframe = final_dataframe.sample(frac=sampling_percentage * 0.01)
 
-        # result_final_dataframe = analyze_data(final_dataframe, sample=sample_data)
-
     dataframes_to_send = [final_dataframe]
 
     if enable_summarization:
