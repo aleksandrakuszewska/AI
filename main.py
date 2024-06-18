@@ -29,70 +29,50 @@ def load_data(uploaded_file):
         st.error(f"Unsupported file format: {ext}")
         return None
 
-st.set_page_config(page_title="DataFrame analysis")
+st.set_page_config(page_title="DataFrame Analysis with LLM", page_icon="🤖")
 
-st.markdown(
-   """
-   <style>
-   .stApp {
-       background: url("https://media.licdn.com/dms/image/C5112AQGWCENbwjTCLw/article-cover_image-shrink_600_2000/0/1520095639394?e=2147483647&v=beta&t=l046v8DL2uB4B-mHN-731BhHK0OcNkh47NztypL1KHI") no-repeat center center fixed !important;
-       background-size: cover !important;
-   }
-   .main {
-       background: none !important;
-       padding-left: 10% !important;
-       padding-right: 40% !important;
-   }
-   </style>
-   """,
-   unsafe_allow_html=True
-)
+st.title("DataFrame Analysis using Large Language Models.")
 
-# def query(payload):
-#     headers = {"Authorization": f"Bearer {API_KEY}"}
-#     response = requests.post(API_URL, headers=headers, json=payload)
-#     try:
-#         response_data = response.json()
-#         generated_text = response_data[0]['generated_text']
-#         return generated_text
-#     except Exception as e:
-#         st.error(f"Nie udało się pobrać odpowiedzi: {e}")
-#         return None
+st.sidebar.title("Settings")
 
-st.title("DataFrame Analysis")
+enable_summarization = False
+if st.sidebar.checkbox("Enable summarization before sending data to LLM", help="Automatically creates another table with summary of the data and sends it to LLM on each request as an additional input."):
+    enable_summarization = True
 
-st.sidebar.write("""
-How to use:
-1. Load CSV or Excel file.
-3. Pick your sampling method.
-4. Ask LLM about the data.
-""")
+sampling_percentage = 100
+sample_data = st.sidebar.checkbox("Enable data sampling")
+if sample_data:
+    sampling_percentage = st.sidebar.slider("Sampling percentage", min_value=1, max_value=100, value=10, help="How much of the original data is sent to LLM.")
+
 
 uploaded_file = st.file_uploader("Load CSV or Excel file", type=["csv", "xls", "xlsx", "xlsm", "xlsb"])
 
 # if uploaded_file:
 #     data_frame = load_data(uploaded_file)
 if uploaded_file:
-    df = pd.read_csv(uploaded_file)
+    final_dataframe = pd.read_csv(uploaded_file)
     st.write("Data description:")
-    st.write("Original data:", df)
+    st.write("Original data:", final_dataframe)
 
-    sample_data = st.checkbox("Enable data sampling")
-    if sample_data:
-        percentage = st.slider("Percentage", min_value=1, max_value=100, value=10)
-        df = df.sample(frac=percentage * 0.01)
-        # result_df = analyze_data(df, sample=sample_data)
-    st.write("Analysis results:")
+    final_dataframe = final_dataframe.sample(frac=sampling_percentage * 0.01)
 
-    numeric_columns = [col for col in df.columns if "ID" not in col.upper() and pd.api.types.is_numeric_dtype(df[col])]
-    describe_result = df[numeric_columns].describe().transpose()
-    sums = df[numeric_columns].sum()
-    variances = df[numeric_columns].var()
+        # result_final_dataframe = analyze_data(final_dataframe, sample=sample_data)
 
-    describe_result['sum'] = sums
-    describe_result['var'] = variances
+    dataframes_to_send = [final_dataframe]
 
-    st.write(describe_result.transpose())
+    if enable_summarization:
+        st.write("Analysis results:")
+
+        numeric_columns = [col for col in final_dataframe.columns if "ID" not in col.upper() and pd.api.types.is_numeric_dtype(final_dataframe[col])]
+        general_analysis_report_of_dataframe = final_dataframe[numeric_columns].describe().transpose()
+        sums = final_dataframe[numeric_columns].sum()
+        variances = final_dataframe[numeric_columns].var()
+
+        general_analysis_report_of_dataframe['sum'] = sums
+        general_analysis_report_of_dataframe['var'] = variances
+
+        st.write(general_analysis_report_of_dataframe.transpose())
+        dataframes_to_send.append(general_analysis_report_of_dataframe)
 
 
     # for msg in st.session_state.messages:
@@ -108,9 +88,11 @@ what_to_use = st.sidebar.radio("What to use:", options=["OpenAI", "Local model",
 if what_to_use == "OpenAI":
     openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
 
+    model_name = st.sidebar.radio("Model:", options=["gpt-3.5-turbo", "gpt-4-turbo", "gpt-4o"])
+
     if st.sidebar.button("Connect"):
         st.session_state.llm = ChatOpenAI(
-            temperature=0, model="gpt-3.5-turbo", openai_api_key=openai_api_key, streaming=True
+            temperature=0, model_name="gpt-3.5-turbo", openai_api_key=openai_api_key, streaming=True
         )
 if what_to_use == "Hugging Face":
     huggingface_model = st.sidebar.text_input("Model Name",placeholder = "e.g. meta-llama/Meta-Llama-3-8B-Instruct")
@@ -187,7 +169,7 @@ if prompt := st.chat_input("What is this data about?"):
 
         pandas_df_agent = create_pandas_dataframe_agent(
             llm,
-            df,  # Passing DataFrame as input
+            dataframes_to_send,  # Passing DataFrame(s) as input
             verbose=True
         )
 
