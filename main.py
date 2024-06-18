@@ -170,7 +170,8 @@ if prompt := st.chat_input("What is this data about?"):
         pandas_df_agent = create_pandas_dataframe_agent(
             llm,
             dataframes_to_send,  # Passing DataFrame(s) as input
-            verbose=True
+            verbose=True,
+            handle_parsing_errors=True
         )
 
         try:
